@@ -313,16 +313,10 @@ void aes_decrypt(unsigned char *input, unsigned char *output, const unsigned cha
     unsigned char state[AES_BLOCK_SIZE];
     unsigned char inv_s_box[256];
     unsigned char round_keys[176]; // 11 * 16 bytes para 128-bit AES
+    memcpy(state, input, AES_BLOCK_SIZE);
 
     generate_inv_s_box(s_box, inv_s_box);
 
-    // Copia o input para o estado
-    memcpy(state, input, AES_BLOCK_SIZE);
-
-    // Gera as chaves de rodada
-    aes_key_expansion(key, round_keys, key_size);
-
-    // Adiciona a última chave de rodada
     add_round_key(state, round_keys + 160);
 
     int nr = key_size / 32 + 6; // Número de rodadas
@@ -332,15 +326,14 @@ void aes_decrypt(unsigned char *input, unsigned char *output, const unsigned cha
     {
         inv_shift_rows(state);
         inv_sub_bytes(state, inv_s_box);
-        add_round_key(state, round_keys + round * 16);
         inv_mix_columns(state);
+        add_round_key(state, round_keys + round * AES_BLOCK_SIZE);
     }
 
     // Última rodada (sem inv_mix_columns)
     inv_shift_rows(state);
     inv_sub_bytes(state, inv_s_box);
-    add_round_key(state, round_keys);
+    add_round_key(state, round_keys + nr * AES_BLOCK_SIZE);
 
-    // Copia o estado para o output
     memcpy(output, state, AES_BLOCK_SIZE);
 }
