@@ -143,6 +143,20 @@ unsigned char* add_padding(unsigned char* input, size_t input_length, size_t* pa
     return padded_data;
 }
 
+unsigned char* remove_padding(unsigned char* input, size_t input_length, size_t* output_length) {
+    unsigned char padding = input[input_length - 1];
+    *output_length = input_length - padding;
+    unsigned char* output_data = malloc(*output_length);
+    if (!output_data) {
+        perror("Erro ao alocar memória para remover padding");
+        exit(1);
+    }
+
+    memcpy(output_data, input, *output_length);
+    return output_data;
+}
+
+
 // Criptografa um bloco
 void aes_encrypt(const unsigned char* plaintext, unsigned char* ciphertext, const unsigned char* round_keys, int key_size) {
     unsigned char state[AES_BLOCK_SIZE];
