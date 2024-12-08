@@ -62,11 +62,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (input_length % AES_BLOCK_SIZE != 0) {
-        printf("Erro: O tamanho do arquivo deve ser múltiplo de %d bytes\n", AES_BLOCK_SIZE);
-        free(input_data);
-        return 1;
-    }
+    size_t padded_length;
+    unsigned char* padded_data = add_padding(input_data, input_length, &padded_length);
+    free(input_data); // Libera o original, não precisamos mais dele
+    input_data = padded_data;
+    input_length = padded_length;
+
 
     // Gerar chave de 128 bits
     unsigned char key[16];

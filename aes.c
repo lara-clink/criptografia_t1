@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "aes.h"
 
 // Tabela de substituição (S-Box) padrão do AES
@@ -118,11 +119,28 @@ static void mix_columns(unsigned char* state) {
         unsigned char* col = state + i * 4;
         unsigned char a = col[0], b = col[1], c = col[2], d = col[3];
 
-        col[0] = a ^ b ^ c ^ d; // Implementação simplificada
+        col[0] = a ^ b ^ c ^ d; 
         col[1] = b ^ c ^ d ^ a;
         col[2] = c ^ d ^ a ^ b;
         col[3] = d ^ a ^ b ^ c;
     }
+}
+
+unsigned char* add_padding(unsigned char* input, size_t input_length, size_t* padded_length) {
+    size_t block_size = 16;
+    size_t padding = block_size - (input_length % block_size);
+    *padded_length = input_length + padding;
+
+    unsigned char* padded_data = malloc(*padded_length);
+    if (!padded_data) {
+        perror("Erro ao alocar memória para padding");
+        exit(1);
+    }
+
+    memcpy(padded_data, input, input_length);
+    memset(padded_data + input_length, padding, padding); // Preenchimento com valor do padding
+
+    return padded_data;
 }
 
 // Criptografa um bloco
