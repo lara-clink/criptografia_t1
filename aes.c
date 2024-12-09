@@ -182,14 +182,17 @@ unsigned char *add_padding(unsigned char *input, size_t input_length, size_t *pa
     size_t block_size = 16;
     size_t padding = block_size - (input_length % block_size);
     *padded_length = input_length + padding;
+
     unsigned char *padded_data = malloc(*padded_length);
     if (!padded_data)
     {
         perror("Erro ao alocar memória para padding");
         exit(1);
     }
+
     memcpy(padded_data, input, input_length);
     memset(padded_data + input_length, padding, padding); // Preenchimento com valor do padding
+
     return padded_data;
 }
 
@@ -203,40 +206,10 @@ unsigned char *remove_padding(unsigned char *input, size_t input_length, size_t 
         perror("Erro ao alocar memória para remover padding");
         exit(1);
     }
-    memcpy(output_data, input, *output_length);
-    return output_data;
-}
-
-unsigned char* add_padding(unsigned char* input, size_t input_length, size_t* padded_length) {
-    size_t block_size = 16;
-    size_t padding = block_size - (input_length % block_size);
-    *padded_length = input_length + padding;
-
-    unsigned char* padded_data = malloc(*padded_length);
-    if (!padded_data) {
-        perror("Erro ao alocar memória para padding");
-        exit(1);
-    }
-
-    memcpy(padded_data, input, input_length);
-    memset(padded_data + input_length, padding, padding); // Preenchimento com valor do padding
-
-    return padded_data;
-}
-
-unsigned char* remove_padding(unsigned char* input, size_t input_length, size_t* output_length) {
-    unsigned char padding = input[input_length - 1];
-    *output_length = input_length - padding;
-    unsigned char* output_data = malloc(*output_length);
-    if (!output_data) {
-        perror("Erro ao alocar memória para remover padding");
-        exit(1);
-    }
 
     memcpy(output_data, input, *output_length);
     return output_data;
 }
-
 
 // Criptografa um bloco
 void aes_encrypt(const unsigned char *plaintext, unsigned char *ciphertext, const unsigned char *round_keys, int key_size)
