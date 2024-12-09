@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "aes.h"
 
 // Tabela de substituição (S-Box) padrão do AES
@@ -17,6 +18,24 @@ static const unsigned char s_box[256] = {
     0xE0, 0x32, 0x3A, 0x0A, 0x49, 0x06, 0x24, 0x5C, 0xC2, 0xD3, 0xAC, 0x62, 0x91, 0x95, 0xE4, 0x79,
     0xE7, 0xC8, 0x37, 0x6D, 0x8D, 0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D,
     0x0F, 0xB0, 0x54, 0xBB, 0x16};
+
+static const unsigned char inv_s_box[256] = {
+    0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
+    0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
+    0x54, 0x7B, 0x94, 0x32, 0xA6, 0xC2, 0x23, 0x3D, 0xEE, 0x4C, 0x95, 0x0B, 0x42, 0xFA, 0xC3, 0x4E,
+    0x08, 0x2E, 0xA1, 0x66, 0x28, 0xD9, 0x24, 0xB2, 0x76, 0x5B, 0xA2, 0x49, 0x6D, 0x8B, 0xD1, 0x25,
+    0x72, 0xF8, 0xF6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xD4, 0xA4, 0x5C, 0xCC, 0x5D, 0x65, 0xB6, 0x92,
+    0x6C, 0x70, 0x48, 0x50, 0xFD, 0xED, 0xB9, 0xDA, 0x5E, 0x15, 0x46, 0x57, 0xA7, 0x8D, 0x9D, 0x84,
+    0x90, 0xD8, 0xAB, 0x00, 0x8C, 0xBC, 0xD3, 0x0A, 0xF7, 0xE4, 0x58, 0x05, 0xB8, 0xB3, 0x45, 0x06,
+    0xD0, 0x2C, 0x1E, 0x8F, 0xCA, 0x3F, 0x0F, 0x02, 0xC1, 0xAF, 0xBD, 0x03, 0x01, 0x13, 0x8A, 0x6B,
+    0x3A, 0x91, 0x11, 0x41, 0x4F, 0x67, 0xDC, 0xEA, 0x97, 0xF2, 0xCF, 0xCE, 0xF0, 0xB4, 0xE6, 0x73,
+    0x96, 0xAC, 0x74, 0x22, 0xE7, 0xAD, 0x35, 0x85, 0xE2, 0xF9, 0x37, 0xE8, 0x1C, 0x75, 0xDF, 0x6E,
+    0x47, 0xF1, 0x1A, 0x71, 0x1D, 0x29, 0xC5, 0x89, 0x6F, 0xB7, 0x62, 0x0E, 0xAA, 0x18, 0xBE, 0x1B,
+    0xFC, 0x56, 0x3E, 0x4B, 0xC6, 0xD2, 0x79, 0x20, 0x9A, 0xDB, 0xC0, 0xFE, 0x78, 0xCD, 0x5A, 0xF4,
+    0x1F, 0xDD, 0xA8, 0x33, 0x88, 0x07, 0xC7, 0x31, 0xB1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xEC, 0x5F,
+    0x60, 0x51, 0x7F, 0xA9, 0x19, 0xB5, 0x4A, 0x0D, 0x2D, 0xE5, 0x7A, 0x9F, 0x93, 0xC9, 0x9C, 0xEF,
+    0xA0, 0xE0, 0x3B, 0x4D, 0xAE, 0x2A, 0xF5, 0xB0, 0xC8, 0xEB, 0xBB, 0x3C, 0x83, 0x53, 0x99, 0x61,
+    0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D};
 
 // RCon (constantes de rotação) para a expansão da chave
 static const unsigned char rcon[10] = {
@@ -124,7 +143,26 @@ static void shift_rows(unsigned char *state)
     state[7] = temp;
 }
 
-// Mistura as colunas (MixColumns) - versão simplificada
+// Multiply in Galois Field (2^8)
+static unsigned char gmul(unsigned char a, unsigned char b)
+{
+    unsigned char p = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        if (b & 1)
+            p ^= a;
+
+        int hi_bit_set = (a & 0x80); // Usando inteiro para representar booleano
+        a <<= 1;
+        if (hi_bit_set)
+            a ^= 0x1B; // x^8 + x^4 + x^3 + x + 1 (AES irreducible polynomial)
+
+        b >>= 1;
+    }
+    return p;
+}
+
+// Correct MixColumns implementation
 static void mix_columns(unsigned char *state)
 {
     for (int i = 0; i < 4; i++)
@@ -132,11 +170,41 @@ static void mix_columns(unsigned char *state)
         unsigned char *col = state + i * 4;
         unsigned char a = col[0], b = col[1], c = col[2], d = col[3];
 
-        col[0] = a ^ b ^ c ^ d; // Implementação simplificada
-        col[1] = b ^ c ^ d ^ a;
-        col[2] = c ^ d ^ a ^ b;
-        col[3] = d ^ a ^ b ^ c;
+        col[0] = gmul(a, 2) ^ gmul(b, 3) ^ c ^ d;
+        col[1] = a ^ gmul(b, 2) ^ gmul(c, 3) ^ d;
+        col[2] = a ^ b ^ gmul(c, 2) ^ gmul(d, 3);
+        col[3] = gmul(a, 3) ^ b ^ c ^ gmul(d, 2);
     }
+}
+
+unsigned char *add_padding(unsigned char *input, size_t input_length, size_t *padded_length)
+{
+    size_t block_size = 16;
+    size_t padding = block_size - (input_length % block_size);
+    *padded_length = input_length + padding;
+    unsigned char *padded_data = malloc(*padded_length);
+    if (!padded_data)
+    {
+        perror("Erro ao alocar memória para padding");
+        exit(1);
+    }
+    memcpy(padded_data, input, input_length);
+    memset(padded_data + input_length, padding, padding); // Preenchimento com valor do padding
+    return padded_data;
+}
+
+unsigned char *remove_padding(unsigned char *input, size_t input_length, size_t *output_length)
+{
+    unsigned char padding = input[input_length - 1];
+    *output_length = input_length - padding;
+    unsigned char *output_data = malloc(*output_length);
+    if (!output_data)
+    {
+        perror("Erro ao alocar memória para remover padding");
+        exit(1);
+    }
+    memcpy(output_data, input, *output_length);
+    return output_data;
 }
 
 // Criptografa um bloco
@@ -174,12 +242,18 @@ void generate_inv_s_box(const unsigned char *s_box, unsigned char *inv_s_box)
     }
 }
 
+// Função para substituir um byte usando a S-Box inversa
+static unsigned char inv_sub_byte(unsigned char byte)
+{
+    return inv_s_box[byte];
+}
+
 // Função para substituir bytes usando a S-Box inversa
-static void inv_sub_bytes(unsigned char *state, const unsigned char *inv_s_box)
+static void inv_sub_bytes(unsigned char *state)
 {
     for (int i = 0; i < 16; i++)
     {
-        state[i] = inv_s_box[state[i]];
+        state[i] = inv_sub_byte(state[i]);
     }
 }
 
@@ -188,14 +262,14 @@ void inv_shift_rows(unsigned char *state)
 {
     unsigned char temp;
 
-    // Linha 1: rotaciona 1 byte para a direita
+    // Segunda Linha: rotaciona 1 byte para a direita
     temp = state[13];
     state[13] = state[9];
     state[9] = state[5];
     state[5] = state[1];
     state[1] = temp;
 
-    // Linha 2: rotaciona 2 bytes para a direita
+    // Terceira Linha: rotaciona 2 bytes para a direita
     temp = state[2];
     state[2] = state[10];
     state[10] = temp;
@@ -203,37 +277,15 @@ void inv_shift_rows(unsigned char *state)
     state[6] = state[14];
     state[14] = temp;
 
-    // Linha 3: rotaciona 3 bytes para a direita
-    temp = state[3];
-    state[3] = state[7];
+    // Quarta Linha: rotaciona 3 bytes para a direita
+    temp = state[7];
     state[7] = state[11];
     state[11] = state[15];
-    state[15] = temp;
+    state[15] = state[13];
+    state[3] = temp;
 }
 
-// Função para multiplicar no campo finito GF(2^8)
-static unsigned char gf_mul(unsigned char a, unsigned char b)
-{
-    unsigned char p = 0;
-    unsigned char hi_bit_set;
-    for (int i = 0; i < 8; i++)
-    {
-        if (b & 1)
-        {
-            p ^= a;
-        }
-        hi_bit_set = a & 0x80;
-        a <<= 1;
-        if (hi_bit_set)
-        {
-            a ^= 0x1b; // Polinômio irreducível
-        }
-        b >>= 1;
-    }
-    return p;
-}
-
-// Mistura inversa das colunas (InvMixColumns)
+// Correct InvMixColumns implementation
 static void inv_mix_columns(unsigned char *state)
 {
     for (int i = 0; i < 4; i++)
@@ -241,99 +293,36 @@ static void inv_mix_columns(unsigned char *state)
         unsigned char *col = state + i * 4;
         unsigned char a = col[0], b = col[1], c = col[2], d = col[3];
 
-        col[0] = gf_mul(a, 0x0e) ^ gf_mul(b, 0x0b) ^ gf_mul(c, 0x0d) ^ gf_mul(d, 0x09);
-        col[1] = gf_mul(a, 0x09) ^ gf_mul(b, 0x0e) ^ gf_mul(c, 0x0b) ^ gf_mul(d, 0x0d);
-        col[2] = gf_mul(a, 0x0d) ^ gf_mul(b, 0x09) ^ gf_mul(c, 0x0e) ^ gf_mul(d, 0x0b);
-        col[3] = gf_mul(a, 0x0b) ^ gf_mul(b, 0x0d) ^ gf_mul(c, 0x09) ^ gf_mul(d, 0x0e);
-    }
-}
-
-// Função para expandir a chave
-void inv_aes_key_expansion(const unsigned char *key, unsigned char *round_keys, int key_size)
-{
-    int i, j;
-    unsigned char temp[4], k;
-    int Nk = key_size / 32; // Número de palavras na chave
-    int Nr = Nk + 6;        // Número de rodadas
-
-    // Copia a chave inicial para as primeiras palavras da chave expandida
-    for (i = 0; i < Nk; i++)
-    {
-        round_keys[i * 4] = key[i * 4];
-        round_keys[i * 4 + 1] = key[i * 4 + 1];
-        round_keys[i * 4 + 2] = key[i * 4 + 2];
-        round_keys[i * 4 + 3] = key[i * 4 + 3];
-    }
-
-    // Gera as palavras restantes da chave expandida
-    for (i = Nk; i < 4 * (Nr + 1); i++)
-    {
-        temp[0] = round_keys[(i - 1) * 4];
-        temp[1] = round_keys[(i - 1) * 4 + 1];
-        temp[2] = round_keys[(i - 1) * 4 + 2];
-        temp[3] = round_keys[(i - 1) * 4 + 3];
-
-        if (i % Nk == 0)
-        {
-            // RotWord
-            k = temp[0];
-            temp[0] = temp[1];
-            temp[1] = temp[2];
-            temp[2] = temp[3];
-            temp[3] = k;
-
-            // SubWord
-            temp[0] = s_box[temp[0]];
-            temp[1] = s_box[temp[1]];
-            temp[2] = s_box[temp[2]];
-            temp[3] = s_box[temp[3]];
-
-            // Rcon
-            temp[0] ^= (0x01 << ((i / Nk) - 1));
-        }
-        else if (Nk > 6 && i % Nk == 4)
-        {
-            // SubWord
-            temp[0] = s_box[temp[0]];
-            temp[1] = s_box[temp[1]];
-            temp[2] = s_box[temp[2]];
-            temp[3] = s_box[temp[3]];
-        }
-
-        round_keys[i * 4] = round_keys[(i - Nk) * 4] ^ temp[0];
-        round_keys[i * 4 + 1] = round_keys[(i - Nk) * 4 + 1] ^ temp[1];
-        round_keys[i * 4 + 2] = round_keys[(i - Nk) * 4 + 2] ^ temp[2];
-        round_keys[i * 4 + 3] = round_keys[(i - Nk) * 4 + 3] ^ temp[3];
+        col[0] = gmul(a, 0x0E) ^ gmul(b, 0x0B) ^ gmul(c, 0x0D) ^ gmul(d, 0x09);
+        col[1] = gmul(a, 0x09) ^ gmul(b, 0x0E) ^ gmul(c, 0x0B) ^ gmul(d, 0x0D);
+        col[2] = gmul(a, 0x0D) ^ gmul(b, 0x09) ^ gmul(c, 0x0E) ^ gmul(d, 0x0B);
+        col[3] = gmul(a, 0x0B) ^ gmul(b, 0x0D) ^ gmul(c, 0x09) ^ gmul(d, 0x0E);
     }
 }
 
 // Função principal de descriptografia AES
-void aes_decrypt(unsigned char *input, unsigned char *output, const unsigned char *key, int key_size)
+void aes_decrypt(unsigned char *ciphertext, unsigned char *plaintext, const unsigned char *round_keys, int key_size)
 {
     unsigned char state[AES_BLOCK_SIZE];
     unsigned char inv_s_box[256];
-    unsigned char round_keys[176]; // 11 * 16 bytes para 128-bit AES
-    memcpy(state, input, AES_BLOCK_SIZE);
-
-    generate_inv_s_box(s_box, inv_s_box);
-
-    add_round_key(state, round_keys + 160);
+    memcpy(state, ciphertext, AES_BLOCK_SIZE);
 
     int nr = key_size / 32 + 6; // Número de rodadas
+    add_round_key(state, round_keys);
 
     // Realiza as rodadas de descriptografia
-    for (int round = nr - 1; round >= 1; round--)
+    for (int round = nr - 1; round > 0; round--)
     {
         inv_shift_rows(state);
-        inv_sub_bytes(state, inv_s_box);
+        inv_sub_bytes(state);
         inv_mix_columns(state);
         add_round_key(state, round_keys + round * AES_BLOCK_SIZE);
     }
 
     // Última rodada (sem inv_mix_columns)
     inv_shift_rows(state);
-    inv_sub_bytes(state, inv_s_box);
+    inv_sub_bytes(state);
     add_round_key(state, round_keys + nr * AES_BLOCK_SIZE);
 
-    memcpy(output, state, AES_BLOCK_SIZE);
+    memcpy(plaintext, state, AES_BLOCK_SIZE);
 }

@@ -2,21 +2,42 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>
 #include "aes.h"
 
-// Função para medir o tempo em segundos
+// Cryptographically secure random number generation
+void generate_secure_key(unsigned char *key, size_t key_length)
+{
+    FILE *urandom = fopen("/dev/urandom", "rb");
+    if (!urandom)
+    {
+        perror("Failed to open /dev/urandom");
+        exit(1);
+    }
+
+    if (fread(key, 1, key_length, urandom) != key_length)
+    {
+        perror("Failed to read random bytes");
+        fclose(urandom);
+        exit(1);
+    }
+
+    fclose(urandom);
+}
+
+// Measure time in seconds
 double measure_time(clock_t start, clock_t end)
 {
     return ((double)(end - start)) / CLOCKS_PER_SEC;
 }
 
-// Função para ler arquivo
+// Read file
 unsigned char *read_file(const char *filename, size_t *length)
 {
     FILE *file = fopen(filename, "rb");
     if (!file)
     {
-        perror("Erro ao abrir arquivo");
+        perror("Error opening file");
         return NULL;
     }
 
@@ -27,36 +48,50 @@ unsigned char *read_file(const char *filename, size_t *length)
     unsigned char *buffer = malloc(*length);
     if (!buffer)
     {
-        perror("Erro ao alocar memória");
+        perror("Memory allocation error");
         fclose(file);
         return NULL;
     }
 
-    fread(buffer, 1, *length, file);
-    fclose(file);
+    if (fread(buffer, 1, *length, file) != *length)
+    {
+        perror("File read error");
+        free(buffer);
+        fclose(file);
+        return NULL;
+    }
 
+    fclose(file);
     return buffer;
 }
 
-// Função para escrever arquivo
-void write_file(const char *filename, unsigned char *data, size_t length)
+// Write file
+int write_file(const char *filename, unsigned char *data, size_t length)
 {
     FILE *file = fopen(filename, "wb");
     if (!file)
     {
-        perror("Erro ao escrever arquivo");
-        return;
+        perror("Error writing file");
+        return 0;
     }
 
-    fwrite(data, 1, length, file);
+    if (fwrite(data, 1, length, file) != length)
+    {
+        perror("File write error");
+        fclose(file);
+        return 0;
+    }
+
     fclose(file);
+    return 1;
 }
 
 int main(int argc, char *argv[])
 {
+    // Argument checking
     if (argc < 4)
     {
-        printf("Uso: %s <input_file> <output_file> <mode: encrypt|decrypt>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <input_file> <output_file> <mode: encrypt|decrypt>\n", argv[0]);
         return 1;
     }
 
@@ -64,6 +99,7 @@ int main(int argc, char *argv[])
     const char *output_file = argv[2];
     const char *mode = argv[3];
 
+    // Read input file
     size_t input_length;
     unsigned char *input_data = read_file(input_file, &input_length);
     if (!input_data)
@@ -71,69 +107,88 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (input_length % AES_BLOCK_SIZE != 0)
-    {
-        printf("Erro: O tamanho do arquivo deve ser múltiplo de %d bytes\n", AES_BLOCK_SIZE);
-        free(input_data);
-        return 1;
-    }
-
-    // Gerar chave de 128 bits
+    // Prepare for encryption/decryption
+    size_t padded_length;
+    unsigned char *padded_data;
     unsigned char key[16];
-    for (int i = 0; i < 16; i++)
-    {
-        key[i] = rand() % 256;
-    }
+    unsigned char round_keys[176];
+    unsigned char *output_data = NULL;
 
-    // Expandir chaves de rodada
-    unsigned char round_keys[176]; // Para AES-128: 44 words (176 bytes)
+    // Key generation and expansion
+    generate_secure_key(key, sizeof(key));
     aes_key_expansion(key, round_keys, 128);
 
-    // Alocar memória para saída
-    unsigned char *output_data = malloc(input_length);
-    if (!output_data)
-    {
-        perror("Erro ao alocar memória para saída");
-        free(input_data);
-        return 1;
-    }
-
     clock_t start, end;
-
-    // Criptografar ou descriptografar
     start = clock();
+
     if (strcmp(mode, "encrypt") == 0)
     {
-        for (size_t i = 0; i < input_length; i += AES_BLOCK_SIZE)
+        // Padding before encryption
+        padded_data = add_padding(input_data, input_length, &padded_length);
+        free(input_data);
+
+        output_data = malloc(padded_length);
+        if (!output_data)
         {
-            aes_encrypt(input_data + i, output_data + i, round_keys, 128);
+            perror("Memory allocation error for output");
+            free(padded_data);
+            return 1;
         }
+
+        // Encrypt each block
+        for (size_t i = 0; i < padded_length; i += AES_BLOCK_SIZE)
+        {
+            aes_encrypt(padded_data + i, output_data + i, round_keys, 128);
+        }
+
+        input_length = padded_length;
+        free(padded_data);
     }
     else if (strcmp(mode, "decrypt") == 0)
     {
+        output_data = malloc(input_length);
+        if (!output_data)
+        {
+            perror("Memory allocation error for output");
+            free(input_data);
+            return 1;
+        }
+
+        // Decrypt each block
         for (size_t i = 0; i < input_length; i += AES_BLOCK_SIZE)
         {
             aes_decrypt(input_data + i, output_data + i, round_keys, 128);
         }
+
+        // Remove padding after decryption
+        size_t original_length;
+        unsigned char *original_data = remove_padding(output_data, input_length, &original_length);
+
+        free(output_data);
+        output_data = original_data;
+        input_length = original_length;
     }
     else
     {
-        printf("Modo inválido: use 'encrypt' ou 'decrypt'\n");
+        fprintf(stderr, "Invalid mode: use 'encrypt' or 'decrypt'\n");
+        free(input_data);
+        return 1;
+    }
+
+    end = clock();
+
+    // Write output file
+    if (!write_file(output_file, output_data, input_length))
+    {
         free(input_data);
         free(output_data);
         return 1;
     }
-    end = clock();
 
-    // Escrever saída no arquivo
-    write_file(output_file, output_data, input_length);
+    // Print execution time
+    printf("Total time (%s): %.6f seconds\n", mode, measure_time(start, end));
 
-    // Medir tempo de execução
-    printf("Tempo total (%s): %.6f segundos\n", mode, measure_time(start, end));
-
-    // Liberar memória
-    free(input_data);
+    // Free memory
     free(output_data);
-
     return 0;
 }
