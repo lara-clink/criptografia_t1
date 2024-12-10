@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "aes.h"
 
 // Tabela de substituição (S-Box) padrão do AES
@@ -107,8 +108,14 @@ static void add_round_key(unsigned char *state, const unsigned char *round_key)
 }
 
 // Substitui todos os bytes no estado usando a S-Box
-static void sub_bytes(unsigned char *state)
+static void sub_bytes(unsigned char *state, size_t length)
 {
+    // Verifique se o estado possui 16 bytes
+    if (length != 16)
+    {
+        fprintf(stderr, "Erro: o estado deve conter exatamente 16 bytes.\n");
+        return;
+    }
     for (int i = 0; i < AES_BLOCK_SIZE; i++)
     {
         state[i] = sub_byte(state[i]);
@@ -177,12 +184,32 @@ static void mix_columns(unsigned char *state)
     }
 }
 
-unsigned char *add_padding(unsigned char *input, size_t input_length, size_t *padded_length)
+unsigned char *add_padding(const unsigned char *input, size_t input_length, size_t *padded_length)
 {
-    size_t block_size = 16;
+    const size_t block_size = 16;
+
+    // Validação de entrada
+    if (!input || !padded_length)
+    {
+        fprintf(stderr, "Entrada inválida para adicionar padding\n");
+        exit(1);
+    }
+
+    // Verifica estouro de tamanho
+    if (input_length > SIZE_MAX - block_size)
+    {
+        fprintf(stderr, "Tamanho de entrada muito grande para adicionar padding\n");
+        exit(1);
+    }
+
+    // Calcula o tamanho do padding
     size_t padding = block_size - (input_length % block_size);
+    if (padding == 0)
+        padding = block_size; // Se já for múltiplo, adiciona um bloco cheio
+
     *padded_length = input_length + padding;
 
+    // Aloca memória para os dados preenchidos
     unsigned char *padded_data = malloc(*padded_length);
     if (!padded_data)
     {
@@ -190,16 +217,44 @@ unsigned char *add_padding(unsigned char *input, size_t input_length, size_t *pa
         exit(1);
     }
 
+    // Copia os dados de entrada para o buffer de saída
     memcpy(padded_data, input, input_length);
-    memset(padded_data + input_length, padding, padding); // Preenchimento com valor do padding
+
+    // Preenche o restante do buffer com o valor do padding (PKCS7)
+    memset(padded_data + input_length, padding, padding);
 
     return padded_data;
 }
 
 unsigned char *remove_padding(unsigned char *input, size_t input_length, size_t *output_length)
 {
+    if (input_length == 0)
+    {
+        fprintf(stderr, "Erro: input_length é zero.\n");
+        exit(1);
+    }
+
     unsigned char padding = input[input_length - 1];
+
+    // Verificar se o padding é válido de acordo com o padrão PKCS7
+    if (padding > AES_BLOCK_SIZE || padding == 0)
+    {
+        fprintf(stderr, "Erro: padding inválido (%d). input_length: %zu\n", padding, input_length);
+        exit(1);
+    }
+
+    // Verificar se todos os bytes de padding são consistentes
+    for (size_t i = input_length - padding; i < input_length; i++)
+    {
+        if (input[i] != padding)
+        {
+            fprintf(stderr, "Erro: bytes de padding inconsistentes\n");
+            exit(1);
+        }
+    }
+
     *output_length = input_length - padding;
+
     unsigned char *output_data = malloc(*output_length);
     if (!output_data)
     {
@@ -208,6 +263,7 @@ unsigned char *remove_padding(unsigned char *input, size_t input_length, size_t 
     }
 
     memcpy(output_data, input, *output_length);
+
     return output_data;
 }
 
@@ -222,13 +278,13 @@ void aes_encrypt(const unsigned char *plaintext, unsigned char *ciphertext, cons
 
     for (int round = 1; round < nr; round++)
     {
-        sub_bytes(state);
+        sub_bytes(state, sizeof(state));
         shift_rows(state);
         mix_columns(state);
         add_round_key(state, round_keys + round * AES_BLOCK_SIZE);
     }
 
-    sub_bytes(state);
+    sub_bytes(state, sizeof(state));
     shift_rows(state);
     add_round_key(state, round_keys + nr * AES_BLOCK_SIZE);
 
@@ -237,15 +293,6 @@ void aes_encrypt(const unsigned char *plaintext, unsigned char *ciphertext, cons
 
 //-------------------------------------------------------------------------------------------------------------------------------
 
-// Função para gerar a tabela inversa (Inverse S-Box)
-void generate_inv_s_box(const unsigned char *s_box, unsigned char *inv_s_box)
-{
-    for (int i = 0; i < 256; i++)
-    {
-        inv_s_box[s_box[i]] = i;
-    }
-}
-
 // Função para substituir um byte usando a S-Box inversa
 static unsigned char inv_sub_byte(unsigned char byte)
 {
@@ -253,11 +300,19 @@ static unsigned char inv_sub_byte(unsigned char byte)
 }
 
 // Função para substituir bytes usando a S-Box inversa
-static void inv_sub_bytes(unsigned char *state)
+void inv_sub_bytes(unsigned char *state, size_t length)
 {
-    for (int i = 0; i < 16; i++)
+    // Verifique se o estado possui 16 bytes
+    if (length != 16)
     {
-        state[i] = inv_sub_byte(state[i]);
+        fprintf(stderr, "Erro: o estado deve conter exatamente 16 bytes.\n");
+        return;
+    }
+
+    // Realiza a substituição inversa
+    for (size_t i = 0; i < 16; i++)
+    {
+        state[i] = inv_sub_byte(state[i]); // inv_sub_byte é a função de substituição
     }
 }
 
@@ -285,11 +340,11 @@ void inv_shift_rows(unsigned char *state)
     temp = state[7];
     state[7] = state[11];
     state[11] = state[15];
-    state[15] = state[13];
+    state[15] = state[3];
     state[3] = temp;
 }
 
-// Correct InvMixColumns implementation
+// InvMixColumns implementation
 static void inv_mix_columns(unsigned char *state)
 {
     for (int i = 0; i < 4; i++)
@@ -304,29 +359,30 @@ static void inv_mix_columns(unsigned char *state)
     }
 }
 
-// Função principal de descriptografia AES
+// Função para descriptografar um bloco
 void aes_decrypt(unsigned char *ciphertext, unsigned char *plaintext, const unsigned char *round_keys, int key_size)
 {
     unsigned char state[AES_BLOCK_SIZE];
-    unsigned char inv_s_box[256];
     memcpy(state, ciphertext, AES_BLOCK_SIZE);
 
     int nr = key_size / 32 + 6; // Número de rodadas
-    add_round_key(state, round_keys);
 
-    // Realiza as rodadas de descriptografia
+    // Primeira rodada: inverso da última rodada de criptografia
+    add_round_key(state, round_keys);
+    inv_shift_rows(state);
+    inv_sub_bytes(state, sizeof(state));
+
+    // Rodadas intermediárias
     for (int round = nr - 1; round > 0; round--)
     {
-        inv_shift_rows(state);
-        inv_sub_bytes(state);
-        inv_mix_columns(state);
         add_round_key(state, round_keys + round * AES_BLOCK_SIZE);
+        inv_mix_columns(state);
+        inv_shift_rows(state);
+        inv_sub_bytes(state, sizeof(state));
     }
 
-    // Última rodada (sem inv_mix_columns)
-    inv_shift_rows(state);
-    inv_sub_bytes(state);
-    add_round_key(state, round_keys + nr * AES_BLOCK_SIZE);
+    // Última rodada
+    add_round_key(state, round_keys);
 
     memcpy(plaintext, state, AES_BLOCK_SIZE);
 }

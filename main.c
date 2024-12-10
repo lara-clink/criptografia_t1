@@ -86,6 +86,30 @@ int write_file(const char *filename, unsigned char *data, size_t length)
     return 1;
 }
 
+void read_key(unsigned char *key, size_t key_length)
+{
+
+    // Ler a chave do arquivo
+    size_t file_length;
+    unsigned char *read_key = read_file("encryption_key.bin", &file_length);
+
+    if (!read_key)
+    {
+        fprintf(stderr, "Failed to read key from file\n");
+        exit(1);
+    }
+
+    if (file_length != key_length)
+    {
+        fprintf(stderr, "Key length mismatch: expected %zu, got %zu\n", key_length, file_length);
+        free(read_key);
+        exit(1);
+    }
+
+    memcpy(key, read_key, key_length);
+    free(read_key);
+}
+
 int main(int argc, char *argv[])
 {
     // Argument checking
@@ -114,15 +138,17 @@ int main(int argc, char *argv[])
     unsigned char round_keys[176];
     unsigned char *output_data = NULL;
 
-    // Key generation and expansion
-    generate_secure_key(key, sizeof(key));
-    aes_key_expansion(key, round_keys, 128);
-
     clock_t start, end;
     start = clock();
 
     if (strcmp(mode, "encrypt") == 0)
     {
+        // Key generation and expansion
+        generate_secure_key(key, sizeof(key));
+        aes_key_expansion(key, round_keys, 128);
+
+        write_file("encryption_key.bin", key, sizeof(key));
+
         // Padding before encryption
         padded_data = add_padding(input_data, input_length, &padded_length);
         free(input_data);
@@ -142,11 +168,15 @@ int main(int argc, char *argv[])
         }
 
         input_length = padded_length;
+
         free(padded_data);
     }
-    else if (strcmp(mode, "decrypt") == 0)
+    if (strcmp(mode, "decrypt") == 0)
     {
+        read_key(key, sizeof(key));
         output_data = malloc(input_length);
+        aes_key_expansion(key, round_keys, 128);
+
         if (!output_data)
         {
             perror("Memory allocation error for output");
@@ -160,12 +190,12 @@ int main(int argc, char *argv[])
             aes_decrypt(input_data + i, output_data + i, round_keys, 128);
         }
 
-        // Remove padding after decryption
+        // Remove padding
         size_t original_length;
-        unsigned char *original_data = remove_padding(output_data, input_length, &original_length);
+        unsigned char *temp = remove_padding(output_data, input_length, &original_length);
 
-        free(output_data);
-        output_data = original_data;
+        free(output_data);  // Free the original buffer
+        output_data = temp; // Use the de-padded buffer
         input_length = original_length;
     }
     else
