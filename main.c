@@ -1,3 +1,5 @@
+//Alunos: Lara Ricalde Machado Clink e Vinicius Oliveira dos Santos 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,7 +173,7 @@ int main(int argc, char *argv[])
 
         free(padded_data);
     }
-    if (strcmp(mode, "decrypt") == 0)
+    else if (strcmp(mode, "decrypt") == 0)
     {
         read_key(key, sizeof(key));
         output_data = malloc(input_length);

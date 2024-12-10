@@ -1,7 +1,10 @@
+//Alunos: Lara Ricalde Machado Clink e Vinicius Oliveira dos Santos 
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <stdint.h>
 #include "aes.h"
 
 // Tabela de substituição (S-Box) padrão do AES
@@ -226,45 +229,36 @@ unsigned char *add_padding(const unsigned char *input, size_t input_length, size
     return padded_data;
 }
 
-unsigned char *remove_padding(unsigned char *input, size_t input_length, size_t *output_length)
-{
-    if (input_length == 0)
-    {
-        fprintf(stderr, "Erro: input_length é zero.\n");
-        exit(1);
+unsigned char *remove_padding(unsigned char *data, size_t input_length, size_t *original_length) {
+    if (input_length == 0) return NULL;
+
+    unsigned char padding_value = data[input_length - 1];
+    
+    // Validate padding
+    if (padding_value == 0 || padding_value > AES_BLOCK_SIZE) {
+        fprintf(stderr, "Erro: padding inválido (%d). input_length: %zu\n", padding_value, input_length);
+        return NULL;
     }
 
-    unsigned char padding = input[input_length - 1];
-
-    // Verificar se o padding é válido de acordo com o padrão PKCS7
-    if (padding > AES_BLOCK_SIZE || padding == 0)
-    {
-        fprintf(stderr, "Erro: padding inválido (%d). input_length: %zu\n", padding, input_length);
-        exit(1);
-    }
-
-    // Verificar se todos os bytes de padding são consistentes
-    for (size_t i = input_length - padding; i < input_length; i++)
-    {
-        if (input[i] != padding)
-        {
-            fprintf(stderr, "Erro: bytes de padding inconsistentes\n");
-            exit(1);
+    // Check if padding is consistent
+    for (size_t i = input_length - padding_value; i < input_length; i++) {
+        if (data[i] != padding_value) {
+            fprintf(stderr, "Erro: padding inconsistente\n");
+            return NULL;
         }
     }
 
-    *output_length = input_length - padding;
-
-    unsigned char *output_data = malloc(*output_length);
-    if (!output_data)
-    {
-        perror("Erro ao alocar memória para remover padding");
-        exit(1);
+    *original_length = input_length - padding_value;
+    
+    // Allocate and copy original data
+    unsigned char *result = malloc(*original_length);
+    if (!result) {
+        perror("Erro de alocação de memória");
+        return NULL;
     }
-
-    memcpy(output_data, input, *output_length);
-
-    return output_data;
+    
+    memcpy(result, data, *original_length);
+    return result;
 }
 
 // Criptografa um bloco
