@@ -1,4 +1,4 @@
-//Alunos: Lara Ricalde Machado Clink e Vinicius Oliveira dos Santos 
+// Alunos: Lara Ricalde Machado Clink e Vinicius Oliveira dos Santos
 
 #ifndef AES_H
 #define AES_H
@@ -11,5 +11,6 @@ unsigned char *remove_padding(unsigned char *input, size_t input_length, size_t 
 void aes_key_expansion(const unsigned char *key, unsigned char *round_keys, int key_size);
 void aes_encrypt(const unsigned char *plaintext, unsigned char *ciphertext, const unsigned char *round_keys, int key_size);
 void aes_decrypt(unsigned char *input, unsigned char *output, const unsigned char *key, int key_size);
-
+void test_sub_bytes_and_inv_sub_bytes();
+void test_s_box_and_inv_s_box();
 #endif

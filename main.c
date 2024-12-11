@@ -1,4 +1,4 @@
-//Alunos: Lara Ricalde Machado Clink e Vinicius Oliveira dos Santos 
+// Alunos: Lara Ricalde Machado Clink e Vinicius Oliveira dos Santos
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -190,6 +190,12 @@ int main(int argc, char *argv[])
         for (size_t i = 0; i < input_length; i += AES_BLOCK_SIZE)
         {
             aes_decrypt(input_data + i, output_data + i, round_keys, 128);
+        }
+
+        if (input_length % AES_BLOCK_SIZE != 0)
+        {
+            fprintf(stderr, "Erro: tamanho do arquivo descriptografado não é múltiplo de 16 bytes\n");
+            exit(1);
         }
 
         // Remove padding
