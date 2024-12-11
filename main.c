@@ -1,5 +1,3 @@
-// Alunos: Lara Ricalde Machado Clink e Vinicius Oliveira dos Santos
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -90,7 +88,6 @@ int write_file(const char *filename, unsigned char *data, size_t length)
 
 void read_key(unsigned char *key, size_t key_length)
 {
-
     // Ler a chave do arquivo
     size_t file_length;
     unsigned char *read_key = read_file("encryption_key.bin", &file_length);
@@ -122,7 +119,8 @@ int main(int argc, char *argv[])
     }
 
     const char *input_file = argv[1];
-    const char *output_file = argv[2];
+    char output_file[256];
+    snprintf(output_file, sizeof(output_file), "outputs/%s", argv[2]);
     const char *mode = argv[3];
 
     // Read input file
@@ -149,7 +147,7 @@ int main(int argc, char *argv[])
         generate_secure_key(key, sizeof(key));
         aes_key_expansion(key, round_keys, 128);
 
-        write_file("encryption_key.bin", key, sizeof(key));
+        write_file("outputs/encryption_key.bin", key, sizeof(key));
 
         // Padding before encryption
         padded_data = add_padding(input_data, input_length, &padded_length);
@@ -175,6 +173,7 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(mode, "decrypt") == 0)
     {
+        snprintf(output_file, sizeof(output_file), "outputs/%s", argv[2]);
         read_key(key, sizeof(key));
         output_data = malloc(input_length);
         aes_key_expansion(key, round_keys, 128);
