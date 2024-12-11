@@ -49,28 +49,28 @@ Use o seguinte comando para compilar o programa:
 
 ```bash
 gcc -o aes main.c aes.c -I.
-
-Como Executar
-Criptografar
+```
+## Como Executar
+### Criptografar
 
 Para criptografar um arquivo de entrada, execute:
 
 ./aes inputs/arquivo.txt custom_output.bin encrypt
 
-Descriptografar
+### Descriptografar
 
 Para descriptografar um arquivo de saída gerado anteriormente:
 
 ./aes custom_output.bin outputs/descrypt.txt decrypt
 
-Comparação com OpenSSL
+## Comparação com OpenSSL
 
 O script compare_aes.sh é usado para comparar a implementação customizada com o OpenSSL. Ele mede o tempo de execução de cada processo e verifica a correção das saídas geradas.
 Executando o Script de Comparação
 
 ./compare_aes.sh inputs/lusiadas.txt
 
-Exemplo de Saída
+## Exemplo de Saída
 
 Executando o programa customizado...
 Total time (encrypt): 0.001234 seconds
@@ -90,7 +90,7 @@ Comparando saídas...
 Saída do programa customizado correta!
 OpenSSL produziu a saída correta para descriptografia!
 
-Notas Importantes
+## Notas Importantes
 
     Padding:
         Este projeto utiliza o esquema PKCS#7 para garantir que o tamanho do arquivo de entrada seja múltiplo de 16 bytes.
@@ -99,7 +99,7 @@ Notas Importantes
     OpenSSL:
         Pode exibir avisos relacionados ao uso de métodos legados (deprecated key derivation). Esses avisos não afetam o funcionamento do programa.
 
-Estrutura do Script de Comparação (compare_aes.sh)
+## Estrutura do Script de Comparação (compare_aes.sh)
 
 O script realiza os seguintes passos:
 
@@ -108,7 +108,6 @@ O script realiza os seguintes passos:
     Compara os tempos de execução.
     Verifica se os arquivos descriptografados são idênticos ao arquivo original.
 
-Licença
+## Licença
 
 Este projeto foi desenvolvido para fins acadêmicos no curso ministrado pelo professor Luis Carlos Pessoa Albini. Qualquer uso externo deve ser autorizado pelos autores.
-```
